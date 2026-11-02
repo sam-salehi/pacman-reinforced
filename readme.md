@@ -51,22 +51,8 @@ Q-learning is a reinforcement learning algorithm that teaches an agent how to ac
 
 The Neural network is to act as a q-function for us, giving us key values for every action given a game state. We then pick the aciton which seems to have the highest Q-value, we see how the game contiues and save the game's next state to be used with the action and correspondig state, as well as the reward for backpropagation. For a more detatailed explanation for how we evaluate the loss, take a look at [here](https://www.turing.com/kb/how-are-neural-networks-used-in-deep-q-learning).
 
-### Why the original agents never cleared the level
-The first generation of agents (CNN / CNN+LSTM on downsampled screenshots) topped out around a median score of ~1000 and never cleared the level. The problems were mostly in the environment and training loop, not the size of the network:
-
-| Problem | Effect |
-|---|---|
-| The game ran in real time (SFML window capped at 60 FPS) and ghost-mode timers used the wall clock | ~10 decisions/s, so 5000 episodes were only ~1M decisions; game dynamics changed with inference speed |
-| `train_rnn.py` never updated the target network | Q-targets always came from the randomly initialised network |
-| `EPS_DECAY = 100` decisions | exploration stopped after the first episode |
-| One gradient step every 32 decisions, replay of 10k | very little learning per sample of experience |
-| Input was a 21x19 RGB average of a screenshot | ghosts, frightened ghosts, walls and pellets blur into similar colours; no motion info |
-| Last conv layer had 1 output channel + ReLU | 195-feature bottleneck that can die entirely |
-| `eatenPelletCount`, `totalPelletCount` and `globalState` were never initialised in C++ | undefined behaviour in the win check / ghost-mode timer |
-| Pacman could walk through the ghost-house door | the agent could die on sleeping ghosts |
-
-### Current design
-**Engine.** All game logic now lives in a headless, deterministic, frame-stepped [`Simulator`](game/simulator.hpp) (no SFML). Timings are in frames, the RNG is seeded, and a decision is requested each time Pacman reaches a cell centre (the only points where he can turn). [`BatchSim`](game/sim_bindings.cpp) steps many games at once from Python (~100k+ decisions/s). The SFML [`Display`](ui/display.hpp) is now only a renderer of a `Simulator`, so watching an agent shows exactly the game it trained on.
+### Architecture
+**Engine.** All game logic lives in a headless, deterministic, frame-stepped [`Simulator`](game/simulator.hpp) (no SFML). Timings are in frames, the RNG is seeded, and a decision is requested each time Pacman reaches a cell centre (the only points where he can turn). [`BatchSim`](game/sim_bindings.cpp) steps many games at once from Python (~100k+ decisions/s). The SFML [`Display`](ui/display.hpp) is only a renderer of a `Simulator`, so watching an agent shows exactly the game it trained on.
 
 **Observation.** 8 binary 21x21 planes taken straight from the game state: walls, pellets, power pellets, Pacman, dangerous ghosts, the cell each dangerous ghost is moving into, frightened ghosts, the cell each frightened ghost is moving into. Plus 3 scalars: frightened time left, fraction of pellets left, chase/scatter mode. The "moving into" planes give ghost direction, so no LSTM or frame stack is needed.
 
@@ -77,8 +63,6 @@ The first generation of agents (CNN / CNN+LSTM on downsampled screenshots) toppe
 **Rewards** (×0.1). Pellet +1, power pellet +2, ghost +5, death −25, clearing the level +50, −0.1 per decision.
 
 ### Results
-The redesigned agent clears the level, which none of the original screenshot-based CNN/LSTM agents ever did (their best median score was ~1090).
-
 Greedy evaluation (no random moves) on 200 new random games at each checkpoint, from the current 30M-step training run:
 
 | Training decisions | Mean score | Level cleared |
