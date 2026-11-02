@@ -1,104 +1,29 @@
-import sys
-import os
+"""Headless greedy evaluation of a trained agent.
+
+    python evaluate.py runs/dqn/best.pth --episodes 1000
+"""
+import argparse
+
+import numpy as np
 import torch
-from game import Game 
-from train_rnn import NULL_STATE, SEQUENCE_LENGTH
-from train_rnn import select_action as select_rnn_action
-from train_cnn import select_action as select_cnn_action
-from utils import plot_scores
-from model import getModel
-from collections import deque
+
+from train_dqn import evaluate
+from dqn import load_policy
 
 
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("weights")
+    p.add_argument("--episodes", type=int, default=1000)
+    p.add_argument("--seed", type=int, default=12345)
+    p.add_argument("--max-decisions", type=int, default=3000)
+    args = p.parse_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    net = load_policy(args.weights, device)
+    r = evaluate(net, args.episodes, device, args.seed, args.max_decisions)
+    print(f"{args.episodes} games | level cleared {100 * r['win_rate']:.1f}% | mean score {r['mean_score']:.0f}"
+          f" | median score {r['median_score']:.0f} | mean decisions {r['mean_len']:.0f}")
 
 
-N_ACTIONS = 4
-
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-
-def evaluate_rnn(model,episodes):
-    scores = []
-
-    for i in range(episodes):
-        print(i)
-        sequence_buffer = deque([NULL_STATE for i in range(SEQUENCE_LENGTH)],maxlen=SEQUENCE_LENGTH)
-        game = Game()
-        while game.running():
-            if not game.decision_available():
-                game.update()
-                if not game.running():
-                    scores.append(game.get_score())
-                continue
-
-            state = game.get_reduced_state().to(device)
-            sequence_buffer.append(state)   
-            action, _, _ = select_rnn_action(model,sequence_buffer)
-            game.step(action.item())
-            if not game.running():
-                scores.append(game.get_score()) 
-
-    return scores
-
-
-def evaluate_cnn(model,episodes):
-    scores = []
-    for i in range(episodes):
-        print(i)
-        game = Game()
-        while game.running():
-            if not game.decision_available():
-                game.update()
-                if not game.running():
-                    scores.append(game.get_score())
-                continue
-            state = game.get_reduced_state().to(device)
-            action, _ , _= select_cnn_action(model,state)
-            game.step(action.item())
-            if not game.running():
-                scores.append(game.get_score())
-    return scores
-                
-
-
-
-
-
-def main(nn_model,weigth_path,isRNN,episodes):
-    model = nn_model(N_ACTIONS).to(device)
-    model.load_state_dict(torch.load(weigth_path,weights_only=True))
-    scores = evaluate_rnn(model,episodes) if isRNN else evaluate_cnn(model,episodes)
-    print("Average score:", sum(scores) / len(scores))
-    plot_scores(scores)
-
-if __name__ == "__main__": # expecting input to be python evaluate.py [agent-type] [path] [model-type] [episodes]
-    args = sys.argv
-    path = args[1]
-    isRNN = bool()
-    episodes = 0
-
-    try:
-        model = getModel(args[1])
-    except:
-        print(f"Unabled to find model with given name: {args[1]}")
-        quit()
-
-    if os.path.exists(args[2]):
-        path = args[2]
-    else:
-        print("Invalid Path given for model weights")
-        quit()
-    if args[3].lower() == "rnn":
-        isRNN = True
-    elif args[3].lower() == "cnn":
-        isRNN = False
-    else:
-        print("Impropoer model description, should be either rnn or cnn.")
-        quit()
-    try:
-        episodes = int(args[4])
-    except:
-        print("Invalid number of episodes to run given.")
-        quit()
-
-
-    main(model,path,isRNN,episodes) 
+if __name__ == "__main__":
+    main()

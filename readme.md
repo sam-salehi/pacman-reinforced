@@ -4,6 +4,12 @@
 This project is my attempt to make and train a deep-q network to play the original Pacman game. For reward flexibility and playing with different reward function, I decided to make the game itself from scratch.
 I've experimented with various neural network architectures and data processing to get a beter understanding of tuning hyper parameters for training and preprocessing. These are all to be found below and appended to.
 
+<p align="center">
+  <img src="./images/agent-clear.gif" alt="Trained DQN agent clearing the level" width="381">
+  <br>
+  <em>The trained DQN agent clearing the level (greedy policy, real-time speed). Score 2740.</em>
+</p>
+
 # Game Engine
 For designing the game I decided to use the Simple and Fast Multimedia (SFML) library in c++. It is then integrated into python through building an API using pybind11. Only methods that are directly relevant to model training have been exported. These can be found in [binding.cpp](ui/bindings.cpp).
 ![game display](./images/gamescreen.png)
@@ -45,46 +51,71 @@ Q-learning is a reinforcement learning algorithm that teaches an agent how to ac
 
 The Neural network is to act as a q-function for us, giving us key values for every action given a game state. We then pick the aciton which seems to have the highest Q-value, we see how the game contiues and save the game's next state to be used with the action and correspondig state, as well as the reward for backpropagation. For a more detatailed explanation for how we evaluate the loss, take a look at [here](https://www.turing.com/kb/how-are-neural-networks-used-in-deep-q-learning).
 
-### Model Architectures and inputs:
-Beneath is a list of models trained on. They can be found [here](model/model.py).
-- CNN: Three convolutional layers followed by two linear.
-- RNN: The CNN described above concatanated to an LSTM model.
-- DRNN: Two stacked LSTM models instead of one.
+### Why the original agents never cleared the level
+The first generation of agents (CNN / CNN+LSTM on downsampled screenshots) topped out around a median score of ~1000 and never cleared the level. The problems were mostly in the environment and training loop, not the size of the network:
 
+| Problem | Effect |
+|---|---|
+| The game ran in real time (SFML window capped at 60 FPS) and ghost-mode timers used the wall clock | ~10 decisions/s, so 5000 episodes were only ~1M decisions; game dynamics changed with inference speed |
+| `train_rnn.py` never updated the target network | Q-targets always came from the randomly initialised network |
+| `EPS_DECAY = 100` decisions | exploration stopped after the first episode |
+| One gradient step every 32 decisions, replay of 10k | very little learning per sample of experience |
+| Input was a 21x19 RGB average of a screenshot | ghosts, frightened ghosts, walls and pellets blur into similar colours; no motion info |
+| Last conv layer had 1 output channel + ReLU | 195-feature bottleneck that can die entirely |
+| `eatenPelletCount`, `totalPelletCount` and `globalState` were never initialised in C++ | undefined behaviour in the win check / ghost-mode timer |
+| Pacman could walk through the ghost-house door | the agent could die on sleeping ghosts |
 
-The input image fed into these networks is not the direct image seen on the screen but,  one turned into a smaller image approximating each cell by a pixel using [transform_image_with_thresholding](model/utils.py) method. A sample is shown below:
+### Current design
+**Engine.** All game logic now lives in a headless, deterministic, frame-stepped [`Simulator`](game/simulator.hpp) (no SFML). Timings are in frames, the RNG is seeded, and a decision is requested each time Pacman reaches a cell centre (the only points where he can turn). [`BatchSim`](game/sim_bindings.cpp) steps many games at once from Python (~100k+ decisions/s). The SFML [`Display`](ui/display.hpp) is now only a renderer of a `Simulator`, so watching an agent shows exactly the game it trained on.
 
- ![image](./images/filtered-game.png).
+**Observation.** 8 binary 21x21 planes taken straight from the game state: walls, pellets, power pellets, Pacman, dangerous ghosts, the cell each dangerous ghost is moving into, frightened ghosts, the cell each frightened ghost is moving into. Plus 3 scalars: frightened time left, fraction of pellets left, chase/scatter mode. The "moving into" planes give ghost direction, so no LSTM or frame stack is needed.
 
+**Network** ([`model/dqn.py`](model/dqn.py)). 4 conv layers (64 channels, last one stride 2) → 512 FC → dueling value/advantage heads. Q-values for moves into walls are masked out.
 
+**Algorithm** ([`model/train_dqn.py`](model/train_dqn.py)). Double DQN, 3-step returns, 64 parallel games, a 520k-transition replay buffer on the GPU, 2 gradient steps (batch 256) per 64 decisions, hard target sync every 2000 updates, ε linearly 1.0→0.01 over 4M decisions, Adam 2.5e-4, Huber loss, bf16 autocast.
 
-### Training Parameters and result:
+**Rewards** (×0.1). Pellet +1, power pellet +2, ghost +5, death −25, clearing the level +50, −0.1 per decision.
 
-| Model Name     | Type  | Episodes | Median Score | Learning Rate | Gamma | Batch Size | Sequence Length | Epsilon Decay | Epsilon Min | Optimizer | Path       |
-|----------------|-------|----------|--------------|---------------|-------|------------|-----------------|---------------|-------------|-----------|------------|
-| DQNAgent       | CNN   | 1000     | 316          | 1e-4          | 0.99  | 128        | NA              | 10000         | 0.05        | AdamW     | DQN_1000.pth         |
-| DQRNAgent |  RNN    | 5000 |  380 | 1e-4  | 0.95 | 128 | 4 | 10000 | 0.05 | Adam | DQRN_5000_adam.pth
-| DQRNAgent |  RNN    | 5000 |  410 | 1e-4  | 0.95 | 128 | 4 | 10000 | 0.05 | AdamW | DQRN_5000.pth
-| DQRNAgent      | RNN   | 5000     | 180          | 1e-4          | 0.99  | 128        | 8               | 10000         | 0.05        | AdamW     | DQRN_5000_8.pth        |
-| DQRNDeep  | RNN   | 5000     | 350          | 1e-4          | 0.99  | 64         | 4               | 10000         | 0.1         | AdamW     | DQRNDEEP_5000.pth  |
-| DQRNSAgent | RNN | 5000 | 390 | 1e-4 | 0.95 | 128  | 4 | 10000 | 0.05 | AdamW | DQRNS_5000.pth
-| DQRNSAgent | RNN | 5000 | 400 | 1e-4 | 0.95 | 128  | 4 | 10000 | 0.05 | Adam | DQRNS_5000_adam.pth
-|DQRNDeep | RNN | 3000C | 1090 | 1e-4 | 0.95 | 128 | 8 | 10000 | 0.05  | AdamW | DQRNDeep_1000_8.pth 
-|DQRNDeep | RNN | 1000 | 300 | Cyclic: 1e-5-1e-2 | 0.95 | 128 | 8 | 10000 | 0.05  | SGD | DQRNDeep_1000_8_SGD.pth
-|DQRNDeep | RNN | 1000 | 300 | Cyclic: 1e-5-1e-2 | 0.95 | 128 | 8 | 10000 | 0.05  | SGD | DQRNDeep_1000_8_SGD_1000.pth
+### Results
+The redesigned agent clears the level, which none of the original screenshot-based CNN/LSTM agents ever did (their best median score was ~1090).
 
+Greedy evaluation (no random moves) on 200 new random games at each checkpoint, from the current 30M-step training run:
 
-## Set up:
-To play pacman: 
-```python
-git clone https://github.com/Blewbsam/ReinforcedPacman.git
-python model/game.py
+| Training decisions | Mean score | Level cleared |
+|---|---|---|
+| 1M | 929 | 0% |
+| 3M | 1938 | 0% |
+| 4.5M | 2015 | 10.5% |
+| 7.5M | 2210 | 13.0% |
+| 9.5M | 2213 | 25.0% |
+| 11.5M | 2225 | 30.5% |
+
+Maximum pellet score is 1520 (150 pellets); anything above that comes from eating frightened ghosts. Training runs at ~5.2k decisions/s on an RTX 5070, so 11.5M decisions is ~36 minutes.
+
+The recording at the top of this page is a full game played by the 12.5M-step checkpoint and was generated with [`model/record.py`](model/record.py).
+
+**Where it still fails.** In lost games the agent typically dies with 10–25 pellets left. It handles the crowded early and mid game well, but is caught chasing the last scattered pellets, when long trips across the maze give the ghosts time to close in.
+
+## Set up
+Requirements: CMake, a C++17 compiler, Python with `torch numpy matplotlib pybind11`, and SFML 2.5+ (only needed to play or watch; training is headless).
+```bash
+pip install pybind11 torch numpy matplotlib
+./build.sh                      # builds build/pacman_sim*.so (headless) and build/pacman*.so + build/pacman_game (SFML)
 ```
 
-To train torch model, import model into [train_rnn]("model/train_rnn.py") or [train_cnn]("model/train_cnn.py) and pass the model to main.
-
-To see trained models in action run:
-```python
-python model/evaluate.py [Model Name] ./weights/[Type]/[Path] [Type] [Episodes]
+Play it yourself (arrow keys):
+```bash
+cd model && python game.py      # or ./build/pacman_game
 ```
-where the parameters are those specified by labels in table above.
+
+Train:
+```bash
+cd model && python train_dqn.py --run runs/dqn --steps 30000000
+```
+Writes `log.csv`, `progress.png`, `latest.pth` and `best.pth` (chosen by greedy-evaluation clear rate) into the run directory.
+
+Evaluate headless / watch an agent play:
+```bash
+cd model && python evaluate.py runs/dqn/best.pth --episodes 1000
+cd model && python watch.py runs/dqn/best.pth --games 3
+```

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 
 #include "game.hpp"
@@ -8,7 +9,7 @@
 
 
 
-GameState::GameState() : ghostAI(this){
+GameState::GameState(uint32_t seed) : ghostAI(this), rng(seed) {
     maze_p = new Maze();
     pacman_p = new Pacman();
     ghosts.fickle_p = new FickleGhost();
@@ -20,10 +21,40 @@ GameState::GameState() : ghostAI(this){
     ghostArray[2] = ghosts.ambusher_p;
     ghostArray[3] = ghosts.stupid_p;
     score = 0;
+    eatenPelletCount = 0;   // was previously uninitialised (undefined behaviour in the win check)
+    ghostsEatenCount = 0;
     gameOver = false;
     status = PROGRESS;
+    frameCount = 0;
+    stateStartFrame = 0;
+    globalState = SCATTER;  // was previously uninitialised; game opens in scatter mode
 
     setInitialGhostStates();
+}
+
+void GameState::tick() { this->frameCount += 1; }
+
+Ghost * GameState::getGhost(GhostType type) {
+    switch (type) {
+        case CHASER: return ghosts.chaser_p;
+        case AMBUSHER: return ghosts.ambusher_p;
+        case FICKLE: return ghosts.fickle_p;
+        default: return ghosts.stupid_p;
+    }
+}
+Position GameState::getGhostPos(GhostType type) { return getGhost(type)->getPos(); }
+Cell GameState::getCell(Position pos) const { return maze_p->getCell(pos); }
+unsigned int GameState::getEatenPelletCount() const { return eatenPelletCount; }
+unsigned int GameState::getTotalPelletCount() const { return maze_p->getTotalPelletCount(); }
+unsigned int GameState::getGhostsEatenCount() const { return ghostsEatenCount; }
+bool GameState::isGameWon() const { return status == WON; }
+std::mt19937& GameState::getRng() { return rng; }
+
+int GameState::frightenedFramesLeft() const {
+    long elapsed = (long)(frameCount - stateStartFrame);
+    if (globalState == FRIGHTENED) return (int)((FRIGHTENED_DURATION_S + TRANSITION_DURATION_S) * GAME_FPS - elapsed);
+    if (globalState == TRANSITION) return (int)(TRANSITION_DURATION_S * GAME_FPS - elapsed);
+    return 0;
 }
 
 
@@ -134,7 +165,7 @@ bool GameState::validPacmanMove(Direction dir) const {
     if (pos.y < 0 || pos.y >= maze_p->getGridHeight()) return false;
     
     Cell cell = maze_p->getCell(pos);
-    return cell != WALL;
+    return cell != WALL && cell != DOOR;
 }
 void GameState::handleCollisions() {
     this->handlePelletCollision();
@@ -210,7 +241,8 @@ void GameState::gameLost() {
 
 void GameState::eatGhost(Ghost * ghost) {
     ghost->setGhostState(EATEN);
-    this->score += 200; 
+    this->score += 200;
+    this->ghostsEatenCount += 1;
 }
 
 bool GameState::jumpAvail(Position pos) {   
@@ -220,7 +252,7 @@ Position GameState::jumpPortal(Position pos) {
     if (pos.y == MIDLE_ROW_INDEX && pos.x == 0) {
         pos.x = maze_p->getGridWidth() - 2;
     } else if (pos.y == MIDLE_ROW_INDEX && pos.x == maze_p->getGridWidth() - 1) {
-        pos.x = 2;
+        pos.x = 1;
     }
     return pos;
 }
@@ -285,20 +317,19 @@ bool GameState::isActive(Ghost * ghost) const {
 }
 
 void GameState::startStateTimer() {
-    this->stateStartTime = std::chrono::steady_clock::now(); 
+    this->stateStartFrame = this->frameCount;
 }
 
 bool GameState::hasTimeElapsed() const {
-    static const std::unordered_map<GhostState, int> globalStateDurations = {
-    {CHASE,20},
-    {SCATTER,7},
-    {FRIGHTENED,4},
-    {TRANSITION,2},
-};
-
-    auto now = std::chrono::steady_clock::now();
-    std::chrono::duration<int> elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(now - stateStartTime);
-    return elapsedTime.count() >= globalStateDurations.at(this->globalState);  
+    // durations are counted in simulated frames, not wall-clock seconds, so the game
+    // behaves identically whether it is rendered at 60 FPS or simulated headless at 100k FPS.
+    static const std::unordered_map<int, int> globalStateDurations = {
+        {CHASE, CHASE_DURATION_S * GAME_FPS},
+        {SCATTER, SCATTER_DURATION_S * GAME_FPS},
+        {FRIGHTENED, FRIGHTENED_DURATION_S * GAME_FPS},
+        {TRANSITION, TRANSITION_DURATION_S * GAME_FPS},
+    };
+    return (long)(frameCount - stateStartFrame) >= globalStateDurations.at(this->globalState);
 }
 
 void GameState::switchToNextState() {

@@ -19,16 +19,7 @@ class GhostUI : public AgentUI {
         
         sf::Sprite getFace();
         
-        // moves Ghost to dir by set_size
-        virtual void move() override;
-
-        // gets stepsize of ghost
-        int getGhostStepSize();
-
         void setOrientationForRendering() override;
-
-        // retuyrns true if pacman is within ghost boundary. false otherwise.
-        bool hasCollided(sf::Vector2f pacmanPosition) const;
 
         void render(GhostState state, Direction ghostDir);
         void setBodyColorForRendering(GhostState state);
@@ -37,9 +28,6 @@ class GhostUI : public AgentUI {
 
         void nextFrame();
         int getRowIndex(Direction ghostDir);
-
-        void setDir(Direction direction);
-        void setState(GhostState state);
 
         GhostType getType() const;
 };

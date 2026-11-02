@@ -1,10 +1,14 @@
 
-#include <typeinfo>
-#include <filesystem>
 #include <cmath>
+#include <iostream>
+#include <string>
 #include <SFML/Graphics.hpp>
 #include "ghostUI.hpp"
 #include "speeds.hpp"
+
+#ifndef ASSETS_DIR
+#define ASSETS_DIR "ui/animations"
+#endif
 
 
 GhostUI::GhostUI(sf::Vector2f pos, sf::Color defaultColor, GhostType type) : AgentUI(pos){
@@ -16,9 +20,8 @@ GhostUI::GhostUI(sf::Vector2f pos, sf::Color defaultColor, GhostType type) : Age
     this->dir = IDLE;
     this->state = SLEEP;
 
-    if (!this->texture->loadFromFile("../ui/animations/GhostAnimation.png")) {
+    if (!this->texture->loadFromFile(std::string(ASSETS_DIR) + "/GhostAnimation.png")) {
         std::cerr << "Failed to load Ghost animation texture!" << std::endl;
-        std::cout << "Current working directory: " << std::__fs::filesystem::current_path() << std::endl;
         return;
     }
     this->sprite->setTexture(*this->texture);
@@ -28,39 +31,6 @@ GhostUI::GhostUI(sf::Vector2f pos, sf::Color defaultColor, GhostType type) : Age
 
 sf::Sprite GhostUI::getFace() {
     return *this->face;
-}
-
-// void GhostUI::move(){
-//     int stepSize = this->getGhostStepSize();
-//     this->move(this->dir,stepSize);
-//     // if (this->containedInCell()) gs->updateGhostPos(this->getIndexedPosition(),this->ghostType); move to front
-// }
-
-void GhostUI::move() {
-    int step_size = this->getGhostStepSize();
-    switch (this->dir) {
-        case UP:    SFposition.y -= step_size; break;
-        case DOWN:  SFposition.y += step_size; break;
-        case LEFT:  SFposition.x -= step_size; break;
-        case RIGHT: SFposition.x += step_size; break;
-        default: break;
-    }
-}
-
-int GhostUI::getGhostStepSize() {
-    GhostType type = this->ghostType;
-    GhostState state = this->state;
-    if (state == TRANSITION || state == FRIGHTENED) {state = FRIGHTENED;}
-    else if (state != EATEN) {state = CHASE;}
-    static const std::unordered_map<GhostType, std::unordered_map<GhostState, double>> ghostSpeeds = {
-    { CHASER, {{ FRIGHTENED, CHASER_FRIGHTENED_SPEED },  { CHASE, CHASER_CHASE_SPEED },{EATEN, GHOST_EATEN_SPEED} } },
-    { AMBUSHER, {{ FRIGHTENED, AMBUSHER_FRIGHTENED_SPEED }, { CHASE, AMBUSHER_CHASE_SPEED }, {EATEN, GHOST_EATEN_SPEED}}},
-    { FICKLE, {{ FRIGHTENED, FICKLE_FRIGHTENED_SPEED }, { CHASE, FICKLE_CHASE_SPEED }, {EATEN, GHOST_EATEN_SPEED}}},
-    { STUPID, {{ FRIGHTENED, STUPID_FRIGHTENED_SPEED },{ CHASE, STUPID_CHASE_SPEED }, {EATEN, GHOST_EATEN_SPEED}} ,}
-    };
-
-    int stepSize = (int) ghostSpeeds.at(type).at(state) / FRAMES;
-    return stepSize;
 }
 
 void GhostUI::render(GhostState state, Direction ghostDir) {
@@ -100,14 +70,6 @@ void GhostUI::setBodyColorForRendering(GhostState state) {
     }
 }
 
-void GhostUI::setDir(Direction direction) {
-    this->dir = direction;
-}
-
-void GhostUI::setState(GhostState state) {
-    this->state = state;
-}
-
 int GhostUI::getRowIndex(Direction ghostDir) {
     switch (ghostDir) {
         case RIGHT: return 0;
@@ -142,13 +104,6 @@ GhostType GhostUI::getType() const {
     return this->ghostType;
 }
 
-
-bool GhostUI::hasCollided(sf::Vector2f pacmanPosition) const { 
-    sf::Vector2f ghostPosition = this->getSFPosition();
-    double y_dist = std::abs(pacmanPosition.y - ghostPosition.y);
-    double x_dist = std::abs(pacmanPosition.x - ghostPosition.x);
-    return ((y_dist < PIXEL_SIZE) && (x_dist < PIXEL_SIZE));
-}
 
 // Ghost Subclasses constructors
 

@@ -1,77 +1,48 @@
-# # Set the minimum required version of CMake
-# cmake_minimum_required(VERSION 3.12)
-
-# # Define the project
-# project(PacmanPython)
-
-# # Find Python3 and Pybind11
-# find_package(Python3 COMPONENTS Interpreter Development)
-# find_package(pybind11 REQUIRED)
-
-# # Define the source files Might need to add all other files.
-# set(SOURCES
-#     ui/bindings.cpp
-#     ui/display.cpp
-#     game/game.cpp
-# )
-
-# # Create the shared library (.so or .pyd)
-
-
-# # Include the necessary directories
-# target_include_directories(pacman PRIVATE ${Python3_INCLUDE_DIRS} ${pybind11_INCLUDE_DIRS})
-
-# # Link against Python and Pybind11
-# target_link_libraries(pacman PRIVATE ${Python3_LIBRARIES} pybind11::module)
-
-# # Set properties for the module (shared library)
-# set_target_properties(pacman PROPERTIES
-#     PREFIX ""  # Don't prefix with lib
-#     SUFFIX ".so"  # Set the output to .so (use .pyd on Windows)
-# )
-
-# CMake version requirement
 cmake_minimum_required(VERSION 3.12)
+project(PacmanGame CXX)
 
-# Define the project
-project(PacmanGame)
-
-# Set the C++ standard
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
 
-# Collect all source files
-file(GLOB SOURCES
-    *.cpp
-    ui/*.cpp
-    ui/ghosts/*.cpp
-    ui/ghosts/*.png
-    game/*.cpp
-)
+# pybind11: use the one installed in the active python environment (pip install pybind11)
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+execute_process(COMMAND ${Python3_EXECUTABLE} -m pybind11 --cmakedir
+                OUTPUT_VARIABLE pybind11_DIR OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+find_package(pybind11 CONFIG REQUIRED)
+find_package(OpenMP)
 
-# Include directories
-include_directories(
-    /opt/homebrew/Cellar/sfml/2.6.2/include
-)
+# Pure game logic (no SFML)
+set(GAME_SOURCES
+    game/agent.cpp game/game.cpp game/ghost.cpp game/ghostAI.cpp
+    game/helper.cpp game/maze.cpp game/pacman.cpp game/simulator.cpp)
 
-# Find pybind11
-find_package(pybind11 REQUIRED)
+# ---- Headless simulator used for training: `import pacman_sim` ----
+pybind11_add_module(pacman_sim ${GAME_SOURCES} game/sim_bindings.cpp)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(pacman_sim PRIVATE OpenMP::OpenMP_CXX)
+endif()
+# Link the C++ runtime statically so the module imports cleanly in environments (e.g. conda)
+# that ship an older libstdc++ than the compiler used here.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_options(pacman_sim PRIVATE -static-libstdc++ -static-libgcc)
+endif()
 
-# Add the Python module
-pybind11_add_module(pacman ${SOURCES})
+# ---- SFML front-end: `import pacman` (watch / play) and the standalone game ----
+find_package(SFML 2.5 COMPONENTS graphics window system QUIET HINTS /usr/lib/x86_64-linux-gnu/cmake/SFML)
+if(SFML_FOUND)
+    set(UI_SOURCES ui/display.cpp ui/pacmanUI.cpp ui/ghosts/agentUI.cpp ui/ghosts/ghostUI.cpp)
+    set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ui/animations")
 
-# Link SFML libraries using the keyword signature
-target_link_libraries(pacman
-    PUBLIC
-    /opt/homebrew/Cellar/sfml/2.6.2/lib/libsfml-graphics.dylib
-    /opt/homebrew/Cellar/sfml/2.6.2/lib/libsfml-window.dylib
-    /opt/homebrew/Cellar/sfml/2.6.2/lib/libsfml-system.dylib
-)
+    pybind11_add_module(pacman ${GAME_SOURCES} ${UI_SOURCES} ui/bindings.cpp)
+    target_link_libraries(pacman PRIVATE sfml-graphics sfml-window sfml-system)
+    target_compile_definitions(pacman PRIVATE ASSETS_DIR="${ASSETS_DIR}")
 
-
-add_custom_command(
-    TARGET pacman POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_CURRENT_SOURCE_DIR}/ui/animations
-    ${CMAKE_CURRENT_BINARY_DIR}/ui/animations
-)
+    add_executable(pacman_game ${GAME_SOURCES} ${UI_SOURCES} ui/main.cpp)
+    target_link_libraries(pacman_game PRIVATE sfml-graphics sfml-window sfml-system)
+    target_compile_definitions(pacman_game PRIVATE ASSETS_DIR="${ASSETS_DIR}")
+else()
+    message(WARNING "SFML not found: only the headless `pacman_sim` module will be built")
+endif()

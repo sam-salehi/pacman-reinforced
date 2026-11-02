@@ -37,6 +37,7 @@ public:
     Position getIndexedPosition();
     // setter for SFPosition
     void setSFPosition(Position pos);
+    void setSFPixel(float x, float y);
 
     sf::Vector2f getSFPosition() const;
 

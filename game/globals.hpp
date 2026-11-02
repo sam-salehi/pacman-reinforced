@@ -51,3 +51,21 @@ enum GhostState {
 
 #define MAZE_HEIGHT 21
 #define MAZE_WIDTH 21
+
+// ---- Simulation constants ----
+// The game is simulated in discrete frames. All timings are expressed in frames so
+// that the simulation is deterministic and independent of wall-clock time / render speed.
+#define GAME_FPS 60
+#define CELL_PX 30                      // size of one maze cell in simulation pixels
+
+// speeds in pixels per second (must divide evenly into CELL_PX * GAME_FPS / step)
+#define PACMAN_SPEED 300
+#define GHOST_CHASE_SPEED 180
+#define GHOST_FRIGHTENED_SPEED 120
+#define GHOST_EATEN_SPEED 300
+
+// global ghost-mode durations in seconds
+#define CHASE_DURATION_S 20
+#define SCATTER_DURATION_S 7
+#define FRIGHTENED_DURATION_S 4
+#define TRANSITION_DURATION_S 2

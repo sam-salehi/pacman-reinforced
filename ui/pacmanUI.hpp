@@ -2,43 +2,26 @@
 
 #include <SFML/Graphics.hpp>
 #include "../game/globals.hpp"
-#include "../game/game.hpp"
 #include "globalsUI.hpp"
 #include "ghosts/agentUI.hpp"
 
 
-
-
-
+// Pacman sprite. Movement is simulated by Simulator; this class only animates it.
 class PacmanUI : public AgentUI {
     private:
         Direction pacmanDir;
-        Direction nextDir;
-        GameState * gs;
 
     public:
-        PacmanUI(GameState * gamestate);
+        PacmanUI();
 
-        // returns true if pacman is in proper position to
-        // move in given direction.
-        bool validPacmanMove(Direction dir);
-    
+        // direction pacman is facing (for choosing the animation row)
+        void setFacing(Direction dir);
 
-        void move() override;
-
-        // changes direction of pacman to specified dir
-        void setNextDir(Direction dir);     
-
-        // sets pacmanDir to nextDir
-        void switchDirection();
-
-        // returns row index of image to
-        // be used for pacman animations
+        // returns row index of image to be used for pacman animations
         int getRowIndex();
 
         // increases frame by one or resets it.
         void nextFrame();
-        
+
         void setOrientationForRendering() override;
 };
-

@@ -1,4 +1,5 @@
 
+#include <cmath>
 #include <iostream>
 #include <random>
 #include <vector>
@@ -122,14 +123,8 @@ void GhostAI::moveFrightenedGhost(Ghost * ghost) {
     if (validPositions.empty()) {
         throw std::runtime_error("No valid positions to pick from!");
     }
-    // Create a random device and generator
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    // Define the range for the random index
     std::uniform_int_distribution<> dis(0, validPositions.size() - 1);
-    // Pick a random index
-    int randomIndex = dis(gen);
+    int randomIndex = dis(this->gs->getRng());
     Position validNextPos = validPositions[randomIndex];
     Direction moveDir = this->getNeighbourDirection(ghost->getPos(), validNextPos);
     ghost->setDir(moveDir);

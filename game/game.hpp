@@ -9,11 +9,12 @@
 #include "ghostAI.hpp"
 #include "globals.hpp"
 
-#include <chrono>
+#include <array>
+#include <cstdint>
+#include <random>
 #include <vector>
 #include <unordered_map>
 
-extern const std::unordered_map<GhostState,int> globalStateDurations;
 
 enum GameStatus {
     LOST,
@@ -39,15 +40,34 @@ class GameState {
     std::array<Ghost *,4> ghostArray;
     GhostAI ghostAI;
     GhostState globalState;
-    std::chrono::steady_clock::time_point stateStartTime;
+    unsigned long frameCount;       // number of simulated frames since game start
+    unsigned long stateStartFrame;  // frame at which globalState was entered
     unsigned int eatenPelletCount;
+    unsigned int ghostsEatenCount;
     unsigned int score;
     bool gameOver;
     GameStatus status;
+    std::mt19937 rng;               // seeded RNG (frightened ghost movement)
 
 public:
-    GameState();
+    explicit GameState(uint32_t seed = std::random_device{}());
     ~GameState();
+    GameState(const GameState&) = delete;
+    GameState& operator=(const GameState&) = delete;
+
+    // advance the game clock by one frame. Must be called once per simulated frame.
+    void tick();
+
+    Position getGhostPos(GhostType type);
+    Ghost * getGhost(GhostType type);
+    Cell getCell(Position pos) const;
+    unsigned int getEatenPelletCount() const;
+    unsigned int getTotalPelletCount() const;
+    unsigned int getGhostsEatenCount() const;
+    bool isGameWon() const;
+    // frames left until ghosts stop being edible (0 if not frightened)
+    int frightenedFramesLeft() const;
+    std::mt19937& getRng();
 
     // getters used to get position of agents:
     Position getPacmanPos() const;

@@ -1,19 +1,6 @@
 #pragma once
 
-#define FRAMES 60
+#include "../../game/globals.hpp"
 
-
-#define PACMAN_SPEED 300
-
-// pixels a second
-#define CHASER_CHASE_SPEED 180
-#define AMBUSHER_CHASE_SPEED 180
-#define FICKLE_CHASE_SPEED 180
-#define STUPID_CHASE_SPEED 180
-
-#define CHASER_FRIGHTENED_SPEED 120
-#define AMBUSHER_FRIGHTENED_SPEED  120
-#define FICKLE_FRIGHTENED_SPEED  120
-#define STUPID_FRIGHTENED_SPEED  120
-
-#define GHOST_EATEN_SPEED 300
+// Rendering frame rate equals the simulation frame rate (one simulated frame per rendered frame).
+#define FRAMES GAME_FPS

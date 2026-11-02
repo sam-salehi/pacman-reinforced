@@ -4,19 +4,21 @@
 #include "pacmanUI.hpp"
 #include "globalsUI.hpp"
 #include "../game/game.hpp"
+#include "../game/simulator.hpp"
 #include "ghosts/ghostUI.hpp"
 
 
-
+// Renders a Simulator with SFML. All game logic lives in Simulator; this class only
+// draws it and forwards keyboard input, so what you see is exactly what the agent trains on.
 class Display {
 
-private: 
+private:
     sf::RenderWindow* window;
     sf::VideoMode videoMode;
     sf::Event ev;
-    GameState * gs;
+    Simulator sim;
 
-    // game objects
+    // sprites
     PacmanUI pacman;
     ChaserUI chaser;
     AmbusherUI ambusher;
@@ -26,61 +28,42 @@ private:
     sf::RectangleShape empty;
     sf::CircleShape pellet;
     sf::CircleShape powerPellet;
+    sf::Texture wallTexture;
 
-    void initWindow();
+    void initWindow(bool limitFramerate);
     void initGameObjects();
-
-
 
     // check for and handle triggered events.
     void pollEvents();
 
-    void updateGhosts();
-    void updateGhost(GhostUI& ghost);
-
-    // hanlding ghost collsions is done in UI for smoother experience
-    void checkGhostCollisions();
-
-    void moveGhosts();
-    void moveGhost(GhostUI& ghost);
-
-    void handleTeleports();
-    void handleTeleport(AgentUI& agent);
-
-
-    // following set of functions set agent in approriat position to be displayed
     void renderPacman();
     void renderGhosts();
-
-    // use the grid_t structure to render display
-    void renderMaze(); 
+    void renderGhost(GhostUI& ghost);
+    void renderMaze();
 
     void scaleSprite(sf::Sprite &sprite);
-
     void selectWall(sf::Sprite &sprite,grid_t& grid,size_t x, size_t y,size_t height, size_t width);
 
-    void gameLost();
-
 public:
-    Display(GameState * gameState);
+    explicit Display(uint32_t seed = 0, bool limitFramerate = true);
     ~Display();
 
-    // listens and reponses to events
-    // move pieces to determined directions
+    // process window events and advance the game by one frame
     void update();
-    // render required portions onto the display
+    // draw the current game state
     void render();
 
-    
-
+    // set pacman's next direction: 0=UP 1=DOWN 2=LEFT 3=RIGHT
     void step(int i);
     void setPacmanDir(Direction dir);
 
     bool pacmanContainedInCell();
 
-    // returns wether the window is open or not
+    // returns whether the window is open
     bool running() const;
+    void close();
+
+    Simulator& simulator() { return sim; }
 
     sf::Image getScreenshot();
 };
-

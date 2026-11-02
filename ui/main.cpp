@@ -1,21 +1,12 @@
-
+#include <random>
 #include "display.hpp"
-#include "../game/game.hpp"
 
-// g++ -std=c++11 ghosts/*.cpp $(ls *.cpp | grep -v bindings.cpp) ../game/*.cpp \
-    -I/opt/homebrew/Cellar/sfml/2.6.2/include \
-    -o main \
-    -L/opt/homebrew/Cellar/sfml/2.6.2/lib -lsfml-graphics -lsfml-window -lsfml-system
-
-
-int main() {    
-
-    GameState * gs = new GameState();
-    Display display(gs);
+// Standalone human-playable game. Build with CMake (target `pacman_game`).
+int main() {
+    Display display(std::random_device{}());
     while (display.running()) {
         display.update();
         display.render();
     }
-
     return 0;
 }

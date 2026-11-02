@@ -47,6 +47,11 @@ void AgentUI::setSFPosition(Position pos) {
     this->SFposition.y = pos.y * PIXEL_SIZE;
 }
 
+void AgentUI::setSFPixel(float x, float y) {
+    this->SFposition.x = x;
+    this->SFposition.y = y;
+}
+
 sf::Vector2f AgentUI::getSFPosition() const {
     return this->SFposition;    
 }

@@ -32,7 +32,7 @@ const std::vector<std::string>  layout = {
 		" XXXXXXXXXXXXXXXXXXX "
 };
 
-Maze::Maze(){
+Maze::Maze() : totalPelletCount(0) {
     grid.resize(layout.size());
     for (unsigned int row = 0; row < layout.size(); ++row) {
         for (char cell: layout[row]) {
